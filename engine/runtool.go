@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	jww "github.com/spf13/jwalterweatherman"
 	"github.com/stoic-cli/stoic-cli-core/tool"
@@ -23,8 +24,12 @@ func (uc uncommittedCheckout) Dispose() {
 	os.RemoveAll(uc.CheckoutPath)
 }
 
-func (e engine) doCheckout(version tool.Version, state State, getter tool.Getter) (tool.Checkout, error) {
-	baseDir := filepath.Join(e.checkoutsDir, url.PathEscape(state.ToolId()))
+func (e engine) doCheckout(
+	endpoint *url.URL, version tool.Version, state State, getter tool.Getter) (tool.Checkout, error) {
+	parts := []string{e.checkoutsDir, endpoint.Hostname()}
+	parts = append(parts, strings.Split(endpoint.EscapedPath(), "/")...)
+	baseDir := filepath.Join(parts...)
+
 	err := os.MkdirAll(baseDir, 0755)
 	if err != nil {
 		return nil, err
@@ -61,7 +66,7 @@ func isValidCheckout(checkout tool.Checkout) bool {
 }
 
 func (e engine) pinnedVersionCheckout(
-	pinVersion tool.Version, state State, getter tool.Getter) (tool.Checkout, error) {
+	endpoint *url.URL, pinVersion tool.Version, state State, getter tool.Getter) (tool.Checkout, error) {
 	checkout := state.CheckoutForVersion(pinVersion)
 	if isValidCheckout(checkout) {
 		return checkout, nil
@@ -75,7 +80,7 @@ func (e engine) pinnedVersionCheckout(
 		return nil, err
 	}
 
-	return e.doCheckout(pinVersion, state, getter)
+	return e.doCheckout(endpoint, pinVersion, state, getter)
 }
 
 func (e engine) combinedUpdateFrequency(toolSetting tool.UpdateFrequency) tool.UpdateFrequency {
@@ -88,7 +93,8 @@ func (e engine) combinedUpdateFrequency(toolSetting tool.UpdateFrequency) tool.U
 	return e.updateFrequencyFallback
 }
 
-func (e engine) fetchUpstreamAndCheckout(state State, channel tool.Channel, getter tool.Getter) (tool.Checkout, error) {
+func (e engine) fetchUpstreamAndCheckout(
+	endpoint *url.URL, state State, channel tool.Channel, getter tool.Getter) (tool.Checkout, error) {
 	version, err := getter.FetchLatest()
 	if err != nil {
 		jww.DEBUG.Printf("unable to check %v for updates: %v", state.ToolId(), err)
@@ -102,7 +108,7 @@ func (e engine) fetchUpstreamAndCheckout(state State, channel tool.Channel, gett
 		return checkout, nil
 	}
 
-	return e.doCheckout(version, state, getter)
+	return e.doCheckout(endpoint, version, state, getter)
 }
 
 func (e engine) RunTool(toolName string, args []string) error {
@@ -134,7 +140,7 @@ func (e engine) RunTool(toolName string, args []string) error {
 	state := e.LoadState(string(url))
 
 	if toolConfig.PinVersion != tool.NullVersion {
-		checkout, err := e.pinnedVersionCheckout(toolConfig.PinVersion, state, getter)
+		checkout, err := e.pinnedVersionCheckout(toolConfig.Endpoint, toolConfig.PinVersion, state, getter)
 		if uc, ok := checkout.(uncommittedCheckout); ok {
 			err = runner.Setup(uc)
 			if err == nil {
@@ -160,7 +166,7 @@ func (e engine) RunTool(toolName string, args []string) error {
 	if state.UpstreamVersion(channel) == tool.NullVersion ||
 		e.combinedUpdateFrequency(toolConfig.UpdateFrequency).
 			IsTimeToUpdate(state.LastUpstreamUpdate(channel)) {
-		checkout, err = e.fetchUpstreamAndCheckout(state, channel, getter)
+		checkout, err = e.fetchUpstreamAndCheckout(toolConfig.Endpoint, state, channel, getter)
 		if err != nil {
 			jww.WARN.Printf(
 				"unable to update %v to latest upstream version: %v",
@@ -201,7 +207,7 @@ func (e engine) RunTool(toolName string, args []string) error {
 		version = checkout.Version()
 	}
 
-	checkout, err = e.doCheckout(version, state, getter)
+	checkout, err = e.doCheckout(toolConfig.Endpoint, version, state, getter)
 	if err != nil {
 		return fmt.Errorf(
 			"failed to checkout version %v of %v: %v", version, toolName, err)
