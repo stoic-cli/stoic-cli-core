@@ -69,6 +69,9 @@ func (sr shellRunner) Setup(checkout tool.Checkout) error {
 	if err != nil {
 		return err
 	}
+	if cmd == nil {
+		return nil
+	}
 	return cmd.Run()
 }
 
@@ -76,6 +79,9 @@ func (sr shellRunner) Run(checkout tool.Checkout, name string, args []string) er
 	cmd, err := sr.shellCommand(checkout, sr.options.Command, sr.options.Environment)
 	if err != nil {
 		return err
+	}
+	if cmd == nil {
+		return nil
 	}
 
 	cmd.Args = append(cmd.Args, args...)
