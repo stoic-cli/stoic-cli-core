@@ -76,6 +76,7 @@ func (tc *ToolConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 }
 
 func toTypedOptions(data interface{}, to *TypedOptions) error {
+	to.Type = ""
 	to.Options = map[string]interface{}{}
 
 	if data == nil {
