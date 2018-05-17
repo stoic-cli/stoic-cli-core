@@ -111,6 +111,13 @@ func (e engine) RunTool(toolName string, args []string) error {
 		return fmt.Errorf("unknown tool: %v", toolName)
 	}
 
+	if toolConfig.Getter.Type == "" {
+		toolConfig.Getter.Type = DefaultToolGetterType
+	}
+	if toolConfig.Runner.Type == "" {
+		toolConfig.Runner.Type = DefaultToolRunnerType
+	}
+
 	getter, err := e.NewGetter(toolConfig)
 	if err != nil {
 		return err

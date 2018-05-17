@@ -8,6 +8,9 @@ import (
 
 const (
 	DefaultToolUpdateFrequency = tool.UpdateWeekly
+
+	DefaultToolGetterType = "git"
+	DefaultToolRunnerType = "shell"
 )
 
 func init() {
