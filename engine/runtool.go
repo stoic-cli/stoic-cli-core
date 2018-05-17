@@ -100,6 +100,9 @@ func (e engine) fetchUpstreamAndCheckout(
 		jww.DEBUG.Printf("unable to check %v for updates: %v", state.ToolId(), err)
 		return nil, err
 	}
+	if version == tool.NullVersion {
+		return nil, fmt.Errorf("got empty version from getter for channel '%v'", channel)
+	}
 
 	state.(*toolState).setUpstreamVersion(channel, version)
 
