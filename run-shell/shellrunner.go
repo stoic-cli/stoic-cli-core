@@ -72,6 +72,8 @@ func (sr shellRunner) Setup(checkout tool.Checkout) error {
 	if cmd == nil {
 		return nil
 	}
+
+	cmd.Dir = checkout.Path()
 	return cmd.Run()
 }
 
