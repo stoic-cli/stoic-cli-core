@@ -18,6 +18,8 @@ type engine struct {
 	stateDir     string
 	checkoutsDir string
 
+	cache stoic.Cache
+
 	updateFrequencyFallback tool.UpdateFrequency
 	updateFrequencyOverride tool.UpdateFrequency
 
