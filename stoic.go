@@ -13,6 +13,8 @@ type Stoic interface {
 	Root() string
 	ConfigFile() string
 
+	Parameters() map[string]interface{}
+
 	Cache() Cache
 
 	RunTool(name string, args []string) error

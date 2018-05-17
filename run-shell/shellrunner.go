@@ -5,6 +5,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"text/template"
 
 	"github.com/google/shlex"
 	"github.com/mitchellh/mapstructure"
@@ -19,7 +21,7 @@ func NewRunner(s stoic.Stoic, config format.ToolConfig) (tool.Runner, error) {
 	if err != nil {
 		return nil, err
 	}
-	return shellRunner{options}, nil
+	return shellRunner{s, options}, nil
 }
 
 type shellRunnerOptions struct {
@@ -30,6 +32,7 @@ type shellRunnerOptions struct {
 }
 
 type shellRunner struct {
+	Stoic   stoic.Stoic
 	options shellRunnerOptions
 }
 
@@ -39,18 +42,37 @@ func (sr shellRunner) shellCommand(
 		return nil, nil
 	}
 
-	splitCommand, err := shlex.Split(shellCommand)
+	parameters := sr.Stoic.Parameters()
+	parameters["Checkout"] = checkout.Path()
+	parameters["Version"] = string(checkout.Version())
+
+	cmdAndArgs, err := shlex.Split(shellCommand)
 	if err != nil {
 		return nil, err
 	}
 
-	command := splitCommand[0]
+	for i := range cmdAndArgs {
+		tmpl, err := template.New("").Parse(cmdAndArgs[i])
+		if err != nil {
+			return nil, err
+		}
+
+		var builder strings.Builder
+		err = tmpl.Execute(&builder, parameters)
+		if err != nil {
+			return nil, err
+		}
+
+		cmdAndArgs[i] = builder.String()
+	}
+
+	command := cmdAndArgs[0]
 	if !filepath.IsAbs(command) {
 		command = filepath.Join(checkout.Path(), command)
 	}
 
 	cmd := exec.Command(command)
-	cmd.Args = splitCommand
+	cmd.Args = cmdAndArgs
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
