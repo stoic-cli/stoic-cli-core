@@ -2,6 +2,8 @@ package stoic
 
 import (
 	"io"
+
+	"github.com/stoic-cli/stoic-cli-core/tool"
 )
 
 type Cache interface {
@@ -16,6 +18,8 @@ type Stoic interface {
 	Parameters() map[string]interface{}
 
 	Cache() Cache
+
+	Tools() []tool.Tool
 
 	RunTool(name string, args []string) error
 }
