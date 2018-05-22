@@ -16,7 +16,7 @@ var (
 type ToolConfig struct {
 	Endpoint        *url.URL
 	Channel         tool.Channel
-	UpdateFrequency tool.UpdateFrequency `yaml:",omitempty"`
+	UpdateFrequency tool.UpdateFrequency `yaml:"update,omitempty"`
 	PinVersion      tool.Version         `yaml:"pin-version,omitempty"`
 	Getter          GetterConfigFormat   `yaml:"getter,omitempty"`
 	Runner          RunnerConfigFormat   `yaml:"runner,omitempty"`
@@ -34,7 +34,7 @@ func (tc *ToolConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var data struct {
 		Endpoint        string
 		Channel         tool.Channel
-		UpdateFrequency tool.UpdateFrequency `yaml:",omitempty"`
+		UpdateFrequency tool.UpdateFrequency `yaml:"update,omitempty"`
 		PinVersion      tool.Version         `yaml:"pin-version,omitempty"`
 		Getter          interface{}          `yaml:"getter,omitempty"`
 		Runner          interface{}          `yaml:"runner,omitempty"`
