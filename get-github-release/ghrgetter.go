@@ -144,7 +144,7 @@ func (gg ghrGetter) getRelease(version tool.Version, wantLatest bool) (tool.Vers
 
 			if resp.StatusCode != 200 {
 				return tool.NullVersion, fmt.Errorf(
-					"unexpected HTTP status while fetching %v for version %v of v",
+					"unexpected HTTP status while fetching %v for version %v of %v",
 					assetName, version, gg.Endpoint)
 			}
 

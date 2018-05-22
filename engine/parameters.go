@@ -18,7 +18,7 @@ func (e *engine) Parameters() map[string]interface{} {
 	if runtime_goarm == 0 {
 		goarm = ""
 	} else {
-		goarm = fmt.Sprintf("%i", runtime_goarm)
+		goarm = fmt.Sprintf("%d", runtime_goarm)
 	}
 
 	params := map[string]interface{}{
