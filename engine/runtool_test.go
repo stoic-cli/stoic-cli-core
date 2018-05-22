@@ -85,11 +85,11 @@ func TestRunTool(t *testing.T) {
 	tid := util.SetupTestInDir(t)
 	defer tid.Close()
 
-	RegisterGetter(t.Name(), func(s stoic.Stoic, toolConfig tool.ConfigFormat) (tool.Getter, error) {
-		return &mockToolGetter{Options: toolConfig.Getter.Options}, nil
+	RegisterGetter(t.Name(), func(s stoic.Stoic, t stoic.Tool) (tool.Getter, error) {
+		return &mockToolGetter{Options: t.Config().Getter.Options}, nil
 	})
-	RegisterRunner(t.Name(), func(s stoic.Stoic, toolConfig tool.ConfigFormat) (tool.Runner, error) {
-		return &mockToolRunner{Options: toolConfig.Runner.Options}, nil
+	RegisterRunner(t.Name(), func(s stoic.Stoic, t stoic.Tool) (tool.Runner, error) {
+		return &mockToolRunner{Options: t.Config().Runner.Options}, nil
 	})
 
 	configFile, err := os.Create("config")

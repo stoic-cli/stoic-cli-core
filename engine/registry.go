@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/stoic-cli/stoic-cli-core"
-	"github.com/stoic-cli/stoic-cli-core/format"
 	"github.com/stoic-cli/stoic-cli-core/tool"
 )
 
@@ -24,8 +23,8 @@ type registryRecord struct {
 	Records map[string]interface{}
 }
 
-type GetterCtor func(stoic.Stoic, format.ToolConfig) (tool.Getter, error)
-type RunnerCtor func(stoic.Stoic, format.ToolConfig) (tool.Runner, error)
+type GetterCtor func(stoic.Stoic, stoic.Tool) (tool.Getter, error)
+type RunnerCtor func(stoic.Stoic, stoic.Tool) (tool.Runner, error)
 
 type toolGetterRecord struct{ Ctor GetterCtor }
 type toolRunnerRecord struct{ Ctor RunnerCtor }
@@ -63,20 +62,20 @@ func RegisterRunner(name string, ctor RunnerCtor) {
 	addToRegistry(toolRunnerRegistry, name, toolRunnerRecord{ctor})
 }
 
-func (e *engine) NewGetter(toolConfig format.ToolConfig) (tool.Getter, error) {
-	typ := toolConfig.Getter.Type
+func (e *engine) getterFor(tool stoic.Tool) (tool.Getter, error) {
+	typ := tool.Config().Getter.Type
 	getter := findInRegistry(toolGetterRegistry, typ)
 	if getter != nil {
-		return getter.(toolGetterRecord).Ctor(e, toolConfig)
+		return getter.(toolGetterRecord).Ctor(e, tool)
 	}
 	return nil, fmt.Errorf("unknown getter type: %v", typ)
 }
 
-func (e *engine) NewRunner(toolConfig format.ToolConfig) (tool.Runner, error) {
-	typ := toolConfig.Runner.Type
+func (e *engine) runnerFor(tool stoic.Tool) (tool.Runner, error) {
+	typ := tool.Config().Runner.Type
 	runner := findInRegistry(toolRunnerRegistry, typ)
 	if runner != nil {
-		return runner.(toolRunnerRecord).Ctor(e, toolConfig)
+		return runner.(toolRunnerRecord).Ctor(e, tool)
 	}
 	return nil, fmt.Errorf("unknown runner type: %v", typ)
 }

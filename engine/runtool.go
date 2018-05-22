@@ -1,55 +1,69 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	jww "github.com/spf13/jwalterweatherman"
+	"github.com/stoic-cli/stoic-cli-core"
 	"github.com/stoic-cli/stoic-cli-core/tool"
 )
 
-type uncommittedCheckout struct {
-	CheckoutVersion tool.Version
-	CheckoutPath    string
+var (
+	ErrUpstreamVersionIsEmpty = errors.New("upstream version is empty")
+)
+
+type plainCheckout struct {
+	version tool.Version
+	path    string
 }
 
-func (uc uncommittedCheckout) Version() tool.Version { return uc.CheckoutVersion }
-func (uc uncommittedCheckout) Path() string          { return uc.CheckoutPath }
+func (uc plainCheckout) Version() tool.Version { return uc.version }
+func (uc plainCheckout) Path() string          { return uc.path }
 
-func (uc uncommittedCheckout) Dispose() {
-	os.RemoveAll(uc.CheckoutPath)
-}
+func (e engine) makeCheckout(t stoic.Tool, version tool.Version, getter tool.Getter, runner tool.Runner) (tool.Checkout, error) {
+	endpoint := t.Endpoint()
 
-func (e engine) doCheckout(
-	endpoint *url.URL, version tool.Version, state State, getter tool.Getter) (tool.Checkout, error) {
 	parts := []string{e.checkoutsDir, endpoint.Hostname()}
 	parts = append(parts, strings.Split(endpoint.EscapedPath(), "/")...)
 	baseDir := filepath.Join(parts...)
 
 	err := os.MkdirAll(baseDir, 0755)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+			"unable to create checkout directory for version %v of %v: %v",
+			version, t.Name(), err)
 	}
 
 	checkoutPath, err := ioutil.TempDir(baseDir, string(version)+"-")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+			"unable to create checkout directory for version %v of %v: %v",
+			version, t.Name(), err)
 	}
 
 	err = getter.CheckoutTo(version, checkoutPath)
 	if err != nil {
 		os.RemoveAll(checkoutPath)
-		return nil, err
+		return nil, fmt.Errorf(
+			"unable to checkout version %v of %v: %v", version, t.Name(), err)
 	}
 
-	return uncommittedCheckout{
-		CheckoutVersion: version,
-		CheckoutPath:    checkoutPath,
-	}, nil
+	checkout := plainCheckout{version, checkoutPath}
+
+	if err := runner.Setup(checkout); err != nil {
+		defer os.RemoveAll(checkoutPath)
+		return nil, fmt.Errorf(
+			"failed to setup checkout for version %v of %v: %v",
+			version, t.Name(), err)
+	}
+
+	t.(engineTool).state.(*toolState).addCheckout(version, checkoutPath, true)
+	return checkout, nil
 }
 
 func isValidCheckout(checkout tool.Checkout) bool {
@@ -65,164 +79,91 @@ func isValidCheckout(checkout tool.Checkout) bool {
 	return true
 }
 
-func (e engine) pinnedVersionCheckout(
-	endpoint *url.URL, pinVersion tool.Version, state State, getter tool.Getter) (tool.Checkout, error) {
-	checkout := state.CheckoutForVersion(pinVersion)
-	if isValidCheckout(checkout) {
-		return checkout, nil
+func (e engine) shouldFetchUpstream(t stoic.Tool) bool {
+	if t.IsVersionPinned() {
+		return false
+	}
+	if t.UpstreamVersion() == tool.NullVersion {
+		return true
 	}
 
-	err := getter.FetchVersion(pinVersion)
-	if err != nil {
-		jww.DEBUG.Printf(
-			"unable to fetch pinned version %v from %v: %v",
-			pinVersion, state.ToolId(), err)
-		return nil, err
-	}
-
-	return e.doCheckout(endpoint, pinVersion, state, getter)
+	updateFrequency := e.updateFrequencyFallback.Combine(
+		t.UpdateFrequency(), e.updateFrequencyOverride)
+	return updateFrequency.IsTimeToUpdate(t.LastUpdate())
 }
 
-func (e engine) combinedUpdateFrequency(toolSetting tool.UpdateFrequency) tool.UpdateFrequency {
-	if e.updateFrequencyOverride != tool.UpdateDefault {
-		return e.updateFrequencyOverride
+func (e engine) getVersionForCheckout(t stoic.Tool, getter tool.Getter) (tool.Version, error) {
+	if !e.shouldFetchUpstream(t) {
+		checkout := t.CurrentCheckout()
+		if checkout != nil {
+			return checkout.Version(), nil
+		}
 	}
-	if toolSetting != tool.UpdateDefault {
-		return toolSetting
-	}
-	return e.updateFrequencyFallback
-}
 
-func (e engine) fetchUpstreamAndCheckout(
-	endpoint *url.URL, state State, channel tool.Channel, getter tool.Getter) (tool.Checkout, error) {
+	if t.IsVersionPinned() {
+		pinVersion := t.CurrentVersion()
+		err := getter.FetchVersion(pinVersion)
+		if err != nil {
+			return tool.NullVersion, fmt.Errorf(
+				"unable to get pinned version %v of %v from upstream: %v",
+				pinVersion, t.Name(), err)
+		}
+
+		return pinVersion, nil
+	}
+
 	version, err := getter.FetchLatest()
+	if err == nil {
+		if version == tool.NullVersion {
+			err = ErrUpstreamVersionIsEmpty
+		} else {
+			t.(engineTool).state.(*toolState).setUpstreamVersion(t.Channel(), version)
+		}
+	}
 	if err != nil {
-		jww.DEBUG.Printf("unable to check %v for updates: %v", state.ToolId(), err)
-		return nil, err
-	}
-	if version == tool.NullVersion {
-		return nil, fmt.Errorf("got empty version from getter for channel '%v'", channel)
-	}
+		jww.WARN.Printf(
+			"unable to get upstream version of %v: %v", t.Name(), err)
 
-	state.(*toolState).setUpstreamVersion(channel, version)
-
-	checkout := state.CheckoutForVersion(version)
-	if isValidCheckout(checkout) {
-		return checkout, nil
+		// Fallback to current, if any
+		version = t.CurrentVersion()
+		if version == tool.NullVersion {
+			return tool.NullVersion, fmt.Errorf(
+				"unable to get upstream version of %v and no fallback is available",
+				t.Name())
+		}
 	}
 
-	return e.doCheckout(endpoint, version, state, getter)
+	return version, nil
 }
 
 func (e engine) RunTool(toolName string, args []string) error {
-	toolConfig, ok := e.tools[toolName]
-	if !ok {
-		return fmt.Errorf("unknown tool: %v", toolName)
-	}
-
-	if toolConfig.Getter.Type == "" {
-		toolConfig.Getter.Type = DefaultToolGetterType
-	}
-	if toolConfig.Runner.Type == "" {
-		toolConfig.Runner.Type = DefaultToolRunnerType
-	}
-
-	getter, err := e.NewGetter(toolConfig)
-	if err != nil {
-		return err
-	}
-	runner, err := e.NewRunner(toolConfig)
+	t, err := e.getTool(toolName)
 	if err != nil {
 		return err
 	}
 
-	url, err := toolConfig.Endpoint.MarshalBinary()
+	getter, err := e.getterFor(t)
 	if err != nil {
 		return err
 	}
-	state := e.LoadState(string(url))
+	runner, err := e.runnerFor(t)
+	if err != nil {
+		return err
+	}
 
-	if toolConfig.PinVersion != tool.NullVersion {
-		checkout, err := e.pinnedVersionCheckout(toolConfig.Endpoint, toolConfig.PinVersion, state, getter)
-		if uc, ok := checkout.(uncommittedCheckout); ok {
-			err = runner.Setup(uc)
-			if err == nil {
-				state.(*toolState).addCheckout(uc.CheckoutVersion, uc.CheckoutPath, false)
-				return runner.Run(uc, toolName, args)
-			}
+	version, err := e.getVersionForCheckout(t, getter)
+	if err != nil {
+		return err
+	}
 
-			uc.Dispose()
-		}
-
+	checkout := t.CheckoutForVersion(version)
+	if !isValidCheckout(checkout) {
+		checkout, err = e.makeCheckout(t, version, getter, runner)
+		// FIXME: When cached artifacts are evicted, new checkouts fail
 		if err != nil {
-			return fmt.Errorf(
-				"unable to create checkout for (pinned) version %v of %v: %v",
-				toolConfig.PinVersion, toolName, err)
-		}
-
-		return runner.Run(checkout, toolName, args)
-	}
-
-	var checkout tool.Checkout
-
-	channel := toolConfig.Channel
-	if state.UpstreamVersion(channel) == tool.NullVersion ||
-		e.combinedUpdateFrequency(toolConfig.UpdateFrequency).
-			IsTimeToUpdate(state.LastUpstreamUpdate(channel)) {
-		checkout, err = e.fetchUpstreamAndCheckout(toolConfig.Endpoint, state, channel, getter)
-		if err != nil {
-			jww.WARN.Printf(
-				"unable to update %v to latest upstream version: %v",
-				toolName, err)
-		}
-
-		if uc, ok := checkout.(uncommittedCheckout); ok {
-			err = runner.Setup(uc)
-			if err == nil {
-				state.(*toolState).addCheckout(uc.CheckoutVersion, uc.CheckoutPath, true)
-				return runner.Run(uc, toolName, args)
-			}
-
-			jww.WARN.Printf(
-				"failed to setup latest upstream version %v of %v: %v",
-				uc.CheckoutVersion, toolName, err)
-
-			uc.Dispose()
-			checkout = nil
+			return err
 		}
 	}
 
-	if checkout == nil {
-		checkout = state.CurrentCheckout()
-		if isValidCheckout(checkout) {
-			return runner.Run(checkout, toolName, args)
-		}
-	}
-
-	// Last chance, fallback!
-
-	var version tool.Version
-	if checkout == nil {
-		// No current version, use upstream
-		version = state.UpstreamVersion(channel)
-	} else {
-		// There used to be a current checkout, it is now invalid
-		version = checkout.Version()
-	}
-
-	checkout, err = e.doCheckout(toolConfig.Endpoint, version, state, getter)
-	if err != nil {
-		return fmt.Errorf(
-			"failed to checkout version %v of %v: %v", version, toolName, err)
-	}
-
-	err = runner.Setup(checkout)
-	if err != nil {
-		checkout.(uncommittedCheckout).Dispose()
-		return fmt.Errorf(
-			"failed to setup version %v of tool %v: %v", version, toolName, err)
-	}
-
-	state.(*toolState).addCheckout(checkout.Version(), checkout.Path(), true)
 	return runner.Run(checkout, toolName, args)
 }

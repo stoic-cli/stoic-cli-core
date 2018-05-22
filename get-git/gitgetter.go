@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/stoic-cli/stoic-cli-core"
-	"github.com/stoic-cli/stoic-cli-core/format"
 	"github.com/stoic-cli/stoic-cli-core/tool"
 
 	"gopkg.in/src-d/go-git.v4"
@@ -20,9 +19,9 @@ import (
 	gitobject "gopkg.in/src-d/go-git.v4/plumbing/object"
 )
 
-func NewGetter(stoic stoic.Stoic, config format.ToolConfig) (tool.Getter, error) {
-	url := config.Endpoint
-	branch := Branch(config.Channel)
+func NewGetter(stoic stoic.Stoic, tool stoic.Tool) (tool.Getter, error) {
+	url := tool.Endpoint()
+	branch := Branch(tool.Channel())
 	if !branch.IsValid() {
 		return nil, fmt.Errorf("invalid branch name: %v", branch)
 	}

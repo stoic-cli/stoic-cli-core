@@ -2,19 +2,13 @@ package format
 
 import (
 	"fmt"
-	"net/url"
-	"regexp"
 
 	jww "github.com/spf13/jwalterweatherman"
 	"github.com/stoic-cli/stoic-cli-core/tool"
 )
 
-var (
-	hasScheme = regexp.MustCompile("^[a-zA-Z][-+.a-zA-Z0-9]*:")
-)
-
 type ToolConfig struct {
-	Endpoint        *url.URL
+	Endpoint        string
 	Channel         tool.Channel
 	UpdateFrequency tool.UpdateFrequency `yaml:"update,omitempty"`
 	PinVersion      tool.Version         `yaml:"pin-version,omitempty"`
@@ -44,16 +38,7 @@ func (tc *ToolConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		return err
 	}
 
-	if !hasScheme.MatchString(data.Endpoint) {
-		data.Endpoint = "https://" + data.Endpoint
-	}
-
-	endpoint, err := url.Parse(data.Endpoint)
-	if err != nil {
-		return err
-	}
-
-	tc.Endpoint = endpoint
+	tc.Endpoint = data.Endpoint
 	tc.Channel = data.Channel
 	tc.UpdateFrequency = data.UpdateFrequency
 	tc.PinVersion = data.PinVersion

@@ -42,7 +42,7 @@ func version(args []string) error {
 
 	out := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 	for _, t := range tools {
-		version := t.Version()
+		version := t.CurrentVersion()
 		if version == tool.NullVersion {
 			continue
 		}

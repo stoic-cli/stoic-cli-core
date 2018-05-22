@@ -11,13 +11,12 @@ import (
 	"github.com/google/shlex"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stoic-cli/stoic-cli-core"
-	"github.com/stoic-cli/stoic-cli-core/format"
 	"github.com/stoic-cli/stoic-cli-core/tool"
 )
 
-func NewRunner(s stoic.Stoic, config format.ToolConfig) (tool.Runner, error) {
+func NewRunner(s stoic.Stoic, tool stoic.Tool) (tool.Runner, error) {
 	var options shellRunnerOptions
-	err := mapstructure.Decode(config.Runner.Options, &options)
+	err := mapstructure.Decode(tool.Config().Runner.Options, &options)
 	if err != nil {
 		return nil, err
 	}

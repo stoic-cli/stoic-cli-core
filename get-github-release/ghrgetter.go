@@ -14,15 +14,14 @@ import (
 	"github.com/google/go-github/github"
 	"github.com/mitchellh/mapstructure"
 	"github.com/stoic-cli/stoic-cli-core"
-	"github.com/stoic-cli/stoic-cli-core/format"
 	"github.com/stoic-cli/stoic-cli-core/tool"
 )
 
-func NewGetter(stoic stoic.Stoic, config format.ToolConfig) (tool.Getter, error) {
-	endpoint := config.Endpoint
+func NewGetter(stoic stoic.Stoic, tool stoic.Tool) (tool.Getter, error) {
+	endpoint := tool.Endpoint()
 
 	var options ghrGetterOptions
-	err := mapstructure.Decode(config.Getter.Options, &options)
+	err := mapstructure.Decode(tool.Config().Getter.Options, &options)
 	if err != nil {
 		return nil, err
 	}
