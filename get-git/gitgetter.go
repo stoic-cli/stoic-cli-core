@@ -27,7 +27,7 @@ func NewGetter(stoic stoic.Stoic, config format.ToolConfig) (tool.Getter, error)
 		return nil, fmt.Errorf("invalid branch name: %v", branch)
 	}
 
-	pathElems := []string{stoic.Root(), "git", url.Host}
+	pathElems := []string{stoic.Root(), "git", url.Hostname()}
 	pathElems = append(pathElems, strings.Split(url.EscapedPath(), "/")...)
 	gitDir := filepath.Join(pathElems...)
 
