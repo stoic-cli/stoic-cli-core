@@ -47,6 +47,11 @@ func version(args []string) error {
 			continue
 		}
 
+		isPinned := ""
+		if t.IsVersionPinned() {
+			isPinned = "\t(pinned)"
+		}
+
 		name := t.Name()
 		endpoint := strings.TrimPrefix(t.Endpoint().String(), "https://")
 
@@ -54,7 +59,8 @@ func version(args []string) error {
 		if channel != tool.DefaultChannel {
 			endpoint = fmt.Sprintf("%v@%v", endpoint, channel)
 		}
-		fmt.Fprintf(out, "%v\t%v\t%v%v\n", name, version, endpoint, channel)
+		fmt.Fprintf(
+			out, "%v\t%v\t%v%v%v\n", name, version, endpoint, channel, isPinned)
 	}
 	out.Flush()
 
