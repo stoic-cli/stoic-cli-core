@@ -18,12 +18,12 @@ type ToolConfig struct {
 	Channel         tool.Channel
 	UpdateFrequency tool.UpdateFrequency `yaml:"update,omitempty"`
 	PinVersion      tool.Version         `yaml:"pin-version,omitempty"`
-	Getter          GetterConfigFormat   `yaml:"getter,omitempty"`
-	Runner          RunnerConfigFormat   `yaml:"runner,omitempty"`
+	Getter          ToolGetterConfig     `yaml:"getter,omitempty"`
+	Runner          ToolRunnerConfig     `yaml:"runner,omitempty"`
 }
 
-type GetterConfigFormat TypedOptions
-type RunnerConfigFormat TypedOptions
+type ToolGetterConfig TypedOptions
+type ToolRunnerConfig TypedOptions
 
 type TypedOptions struct {
 	Type    string
