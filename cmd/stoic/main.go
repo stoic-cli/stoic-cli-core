@@ -8,18 +8,14 @@ import (
 )
 
 func translateSymlink() {
-	executable, err := os.Executable()
-	if err != nil {
-		return
+	_, tool := filepath.Split(os.Args[0])
+	if tool != "stoic" {
+		executable, err := os.Executable()
+		if err != nil {
+			executable = "stoic"
+		}
+		os.Args = append([]string{executable, "run", "--", tool}, os.Args[1:]...)
 	}
-	target, err := os.Readlink(executable)
-	if err != nil {
-		return
-	}
-
-	dir, tool := filepath.Split(executable)
-	executable = filepath.Join(dir, target)
-	os.Args = append([]string{executable, "run", "--", tool}, os.Args[1:]...)
 }
 
 func main() {
