@@ -22,7 +22,7 @@ func isStoic(name string) bool {
 
 func translateSymlink() {
 	_, tool := filepath.Split(os.Args[0])
-	if !isStoic(tool) {
+	if isStoic(tool) {
 		return
 	}
 
