@@ -163,7 +163,7 @@ func (pe pythonEnvironment) Python() string {
 	return pe.python
 }
 
-func (pe pythonEnvironment) PythonEnviron() []string {
+func (pe pythonEnvironment) Environ() []string {
 	return append(os.Environ(),
 		"PIP_CACHE_DIR="+pe.pipCache,
 		"PYTHONPATH="+pe.SitePackages(),
@@ -206,7 +206,7 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 	)
 	initVenv.Stdout = os.Stdout
 	initVenv.Stderr = os.Stderr
-	initVenv.Env = pe.PythonEnviron()
+	initVenv.Env = pe.Environ()
 
 	// virtualenv reported failing on Linux with non UTF-8 locale
 	initVenv.Env = append(initVenv.Env, "LANG=en_US.UTF-8")
@@ -239,7 +239,7 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 	)
 	installRequirements.Stdout = os.Stdout
 	installRequirements.Stderr = os.Stderr
-	installRequirements.Env = pe.PythonEnviron()
+	installRequirements.Env = pe.Environ()
 
 	err = installRequirements.Run()
 	if err != nil {
@@ -274,7 +274,7 @@ func (ve virtualEnvironment) PathEnv() string {
 	return vePath
 }
 
-func (ve virtualEnvironment) PythonEnviron() []string {
+func (ve virtualEnvironment) Environ() []string {
 	// TODO: Should filter out PYTHONHOME from environment, if set
 	return append(os.Environ(),
 		"PATH="+ve.PathEnv(),

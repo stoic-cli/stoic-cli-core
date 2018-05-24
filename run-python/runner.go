@@ -127,7 +127,7 @@ func (r runner) Setup(checkout tool.Checkout) error {
 
 	setupCommand.Stdout = os.Stdout
 	setupCommand.Stderr = os.Stderr
-	setupCommand.Env = ve.PythonEnviron()
+	setupCommand.Env = ve.Environ()
 
 	err = setupCommand.Run()
 	if err != nil {
