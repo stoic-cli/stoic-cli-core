@@ -20,6 +20,14 @@ func NewRunner(s stoic.Stoic, tool stoic.Tool) (tool.Runner, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if options.SetupEnvironment == nil {
+		options.SetupEnvironment = map[string]string{}
+	}
+	if options.Environment == nil {
+		options.Environment = map[string]string{}
+	}
+
 	return Runner{s, options}, nil
 }
 
