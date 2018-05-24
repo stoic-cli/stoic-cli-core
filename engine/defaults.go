@@ -9,18 +9,28 @@ import (
 )
 
 const (
+	GitGetterType           = "git"
+	GithubReleaseGetterType = "github-release"
+
+	ShellRunnerType   = "shell"
+	PythonRunnerType  = "python"
+	Python2RunnerType = "python2"
+	Python3RunnerType = "python3"
+)
+
+const (
 	DefaultToolUpdateFrequency = tool.UpdateWeekly
 
-	DefaultToolGetterType = "git"
-	DefaultToolRunnerType = "shell"
+	DefaultToolGetterType = GitGetterType
+	DefaultToolRunnerType = ShellRunnerType
 )
 
 func init() {
-	RegisterGetter("git", git.NewGetter)
-	RegisterGetter("github-release", github.NewGetter)
+	RegisterGetter(GitGetterType, git.NewGetter)
+	RegisterGetter(GithubReleaseGetterType, github.NewGetter)
 
-	RegisterRunner("shell", shell.NewRunner)
-	RegisterRunner("python", python.NewPythonRunner)
-	RegisterRunner("python2", python.NewPython2Runner)
-	RegisterRunner("python3", python.NewPython3Runner)
+	RegisterRunner(ShellRunnerType, shell.NewRunner)
+	RegisterRunner(PythonRunnerType, python.NewPythonRunner)
+	RegisterRunner(Python2RunnerType, python.NewPython2Runner)
+	RegisterRunner(Python3RunnerType, python.NewPython3Runner)
 }
