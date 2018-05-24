@@ -27,7 +27,7 @@ func lookupAbsolutePath(file string) (string, error) {
 // operation on the file.
 func fileExists(filename string) bool {
 	_, err := os.Stat(filename)
-	return err == nil
+	return err == nil || !os.IsNotExist(err)
 }
 
 func currentTimestamp() []byte {
