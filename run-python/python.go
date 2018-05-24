@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
+	jww "github.com/spf13/jwalterweatherman"
 	"github.com/stoic-cli/stoic-cli-core"
 )
 
@@ -98,7 +99,6 @@ func newPythonEnvironment(root string, python string, cache stoic.Cache) (python
 			"unable to write requirements for python environment")
 	}
 
-	///...
 	getPip, err := getPipScript(cache)
 	if err != nil {
 		return pythonEnvironment{}, err
@@ -132,7 +132,9 @@ func newPythonEnvironment(root string, python string, cache stoic.Cache) (python
 			"unable to setup pip in python environment")
 	}
 
-	ioutil.WriteFile(marker, currentTimestamp(), 0644)
+	if err := ioutil.WriteFile(marker, currentTimestamp(), 0644); err != nil {
+		jww.DEBUG.Printf("failed to mark python environment as ready: %v", err)
+	}
 	return pe, nil
 }
 
@@ -230,7 +232,9 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 			"unable to setup requirements in virtual environment")
 	}
 
-	ioutil.WriteFile(marker, currentTimestamp(), 0644)
+	if err := ioutil.WriteFile(marker, currentTimestamp(), 0644); err != nil {
+		jww.DEBUG.Printf("failed to mark virtual environment as ready: %v", err)
+	}
 	return ve, nil
 }
 
