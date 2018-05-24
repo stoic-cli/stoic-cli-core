@@ -1,4 +1,4 @@
-package gitgetter
+package getter
 
 import (
 	"regexp"

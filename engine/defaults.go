@@ -1,9 +1,9 @@
 package engine
 
 import (
-	"github.com/stoic-cli/stoic-cli-core/get-git"
-	"github.com/stoic-cli/stoic-cli-core/get-github-release"
-	"github.com/stoic-cli/stoic-cli-core/run-shell"
+	git "github.com/stoic-cli/stoic-cli-core/get-git"
+	github "github.com/stoic-cli/stoic-cli-core/get-github-release"
+	shell "github.com/stoic-cli/stoic-cli-core/run-shell"
 	"github.com/stoic-cli/stoic-cli-core/tool"
 )
 
@@ -15,8 +15,8 @@ const (
 )
 
 func init() {
-	RegisterGetter("git", gitgetter.NewGetter)
-	RegisterGetter("github-release", ghrgetter.NewGetter)
+	RegisterGetter("git", git.NewGetter)
+	RegisterGetter("github-release", github.NewGetter)
 
-	RegisterRunner("shell", shellrunner.NewRunner)
+	RegisterRunner("shell", shell.NewRunner)
 }

@@ -1,4 +1,4 @@
-package ghrgetter
+package getter
 
 import (
 	"context"

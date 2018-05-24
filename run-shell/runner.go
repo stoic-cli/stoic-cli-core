@@ -1,4 +1,4 @@
-package shellrunner
+package runner
 
 import (
 	"fmt"
