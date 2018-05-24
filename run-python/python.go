@@ -88,13 +88,21 @@ func newPythonEnvironment(root string, python string, cache stoic.Cache) (python
 		return pe, nil
 	}
 
-	if err := os.MkdirAll(pe.Scripts(), os.ModePerm); err != nil {
+	err := os.MkdirAll(pe.Scripts(), os.ModePerm)
+	if err != nil {
 		return pythonEnvironment{}, errors.Wrap(err,
 			"unable to setup directory for python environmnent")
 	}
 
+	defer func() {
+		if err != nil {
+			os.RemoveAll(pe.root)
+		}
+	}()
+
 	envRequirements := filepath.Join(pe.root, requirementsBase)
-	if err := ioutil.WriteFile(envRequirements, requirements, 0644); err != nil {
+	err = ioutil.WriteFile(envRequirements, requirements, 0644)
+	if err != nil {
 		return pythonEnvironment{}, errors.Wrap(err,
 			"unable to write requirements for python environment")
 	}
@@ -127,7 +135,8 @@ func newPythonEnvironment(root string, python string, cache stoic.Cache) (python
 
 	cmd.Env = pe.environForSetup()
 
-	if err := cmd.Run(); err != nil {
+	err = cmd.Run()
+	if err != nil {
 		return pythonEnvironment{}, errors.Wrap(err,
 			"unable to setup pip in python environment")
 	}
@@ -207,6 +216,12 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 		return virtualEnvironment{}, errors.Wrap(err,
 			"unable to initialize virtual environment")
 	}
+
+	defer func() {
+		if err != nil {
+			_ = os.RemoveAll(ve.root)
+		}
+	}()
 
 	venvRequirements := filepath.Join(ve.root, requirementsBase)
 	err = ioutil.WriteFile(venvRequirements, requirements, 0644)
