@@ -1,11 +1,11 @@
 package engine
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/mitchellh/go-homedir"
+	"github.com/pkg/errors"
 	"github.com/stoic-cli/stoic-cli-core"
 	"github.com/stoic-cli/stoic-cli-core/format"
 	"github.com/stoic-cli/stoic-cli-core/tool"
@@ -57,8 +57,8 @@ func NewWithOptions(o EngineOptions) (stoic.Stoic, error) {
 	configFilename := filepath.Join(o.Root, "config")
 	if configFile, err := os.Open(configFilename); err != nil {
 		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf(
-				"unable to load config from %v: %v", configFilename, err)
+			return nil, errors.Wrapf(
+				err, "unable to load config from '%v'", configFilename)
 		}
 		configFilename = ""
 	} else {
@@ -66,8 +66,8 @@ func NewWithOptions(o EngineOptions) (stoic.Stoic, error) {
 
 		decoder := yaml.NewDecoder(configFile)
 		if err := decoder.Decode(&sc); err != nil {
-			return nil, fmt.Errorf(
-				"unable to load config from %v: %v", configFilename, err)
+			return nil, errors.Wrapf(
+				err, "unable to load config from '%v'", configFilename)
 		}
 
 		if sc.UpdateFrequency != tool.UpdateDefault {

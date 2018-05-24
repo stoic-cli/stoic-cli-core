@@ -2,7 +2,6 @@ package getter
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/google/go-github/github"
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"github.com/stoic-cli/stoic-cli-core"
 	"github.com/stoic-cli/stoic-cli-core/tool"
 )
@@ -104,7 +104,7 @@ func (gg ghrGetter) getRelease(version tool.Version, wantLatest bool) (tool.Vers
 
 	owner, repo := gg.getOwnerRepo()
 	if owner == "" || repo == "" {
-		return tool.NullVersion, fmt.Errorf(
+		return tool.NullVersion, errors.Errorf(
 			"unable to infer owner and repository from %v", gg.Endpoint)
 	}
 
@@ -142,8 +142,8 @@ func (gg ghrGetter) getRelease(version tool.Version, wantLatest bool) (tool.Vers
 			defer resp.Body.Close()
 
 			if resp.StatusCode != 200 {
-				return tool.NullVersion, fmt.Errorf(
-					"unexpected HTTP status while fetching %v for version %v of %v",
+				return tool.NullVersion, errors.Errorf(
+					"unexpected HTTP status while fetching '%v' for version '%v' of '%v'",
 					assetName, version, gg.Endpoint)
 			}
 
@@ -156,8 +156,8 @@ func (gg ghrGetter) getRelease(version tool.Version, wantLatest bool) (tool.Vers
 		}
 	}
 
-	return tool.NullVersion, fmt.Errorf(
-		"release %v has no asset matching %v", version, assetName)
+	return tool.NullVersion, errors.Errorf(
+		"release '%v' has no asset matching '%v'", version, assetName)
 }
 
 func (gg ghrGetter) FetchLatest() (tool.Version, error) {
@@ -184,8 +184,8 @@ func (gg ghrGetter) CheckoutTo(version tool.Version, path string) error {
 
 	cacheReader := gg.Stoic.Cache().Get(gg.getCacheKey(version, assetName))
 	if cacheReader == nil {
-		return fmt.Errorf(
-			"unable to retrieve %v for version %v of %v from cache",
+		return errors.Errorf(
+			"unable to retrieve '%v' for version '%v' of '%v' from cache",
 			assetName, version, gg.Endpoint)
 	}
 	defer cacheReader.Close()

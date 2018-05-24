@@ -1,20 +1,15 @@
 package engine
 
 import (
-	"errors"
-	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
 	"github.com/stoic-cli/stoic-cli-core"
 	"github.com/stoic-cli/stoic-cli-core/tool"
-)
-
-var (
-	ErrUpstreamVersionIsEmpty = errors.New("upstream version is empty")
 )
 
 type plainCheckout struct {
@@ -34,32 +29,32 @@ func (e engine) makeCheckout(t stoic.Tool, version tool.Version, getter tool.Get
 
 	err := os.MkdirAll(baseDir, 0755)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"unable to create checkout directory for version %v of %v: %v",
-			version, t.Name(), err)
+		return nil, errors.Wrapf(err,
+			"unable to create checkout directory for version '%v' of '%v'",
+			version, t.Name())
 	}
 
 	checkoutPath, err := ioutil.TempDir(baseDir, string(version)+"-")
 	if err != nil {
-		return nil, fmt.Errorf(
-			"unable to create checkout directory for version %v of %v: %v",
-			version, t.Name(), err)
+		return nil, errors.Wrapf(err,
+			"unable to create checkout directory for version '%v' of '%v'",
+			version, t.Name())
 	}
 
 	err = getter.CheckoutTo(version, checkoutPath)
 	if err != nil {
 		os.RemoveAll(checkoutPath)
-		return nil, fmt.Errorf(
-			"unable to checkout version %v of %v: %v", version, t.Name(), err)
+		return nil, errors.Wrapf(err,
+			"unable to checkout version '%v' of '%v'", version, t.Name())
 	}
 
 	checkout := plainCheckout{version, checkoutPath}
 
 	if err := runner.Setup(checkout); err != nil {
 		defer os.RemoveAll(checkoutPath)
-		return nil, fmt.Errorf(
-			"failed to setup checkout for version %v of %v: %v",
-			version, t.Name(), err)
+		return nil, errors.Wrapf(err,
+			"failed to setup checkout for version '%v' of '%v'",
+			version, t.Name())
 	}
 
 	t.(engineTool).state.(*toolState).addCheckout(version, checkoutPath, true)
@@ -104,9 +99,9 @@ func (e engine) getVersionForCheckout(t stoic.Tool, getter tool.Getter) (tool.Ve
 		pinVersion := t.CurrentVersion()
 		err := getter.FetchVersion(pinVersion)
 		if err != nil {
-			return tool.NullVersion, fmt.Errorf(
-				"unable to get pinned version %v of %v from upstream: %v",
-				pinVersion, t.Name(), err)
+			return tool.NullVersion, errors.Wrapf(err,
+				"unable to get pinned version '%v' of '%v' from upstream",
+				pinVersion, t.Name())
 		}
 
 		return pinVersion, nil
@@ -115,7 +110,7 @@ func (e engine) getVersionForCheckout(t stoic.Tool, getter tool.Getter) (tool.Ve
 	version, err := getter.FetchLatest()
 	if err == nil {
 		if version == tool.NullVersion {
-			err = ErrUpstreamVersionIsEmpty
+			err = errors.New("upstream version is empty")
 		} else {
 			t.(engineTool).state.(*toolState).setUpstreamVersion(t.Channel(), version)
 		}
@@ -127,8 +122,8 @@ func (e engine) getVersionForCheckout(t stoic.Tool, getter tool.Getter) (tool.Ve
 		// Fallback to current, if any
 		version = t.CurrentVersion()
 		if version == tool.NullVersion {
-			return tool.NullVersion, fmt.Errorf(
-				"unable to get upstream version of %v and no fallback is available",
+			return tool.NullVersion, errors.Errorf(
+				"unable to get upstream version of '%v', and no fallback is available",
 				t.Name())
 		}
 	}

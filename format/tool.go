@@ -1,8 +1,7 @@
 package format
 
 import (
-	"fmt"
-
+	"github.com/pkg/errors"
 	jww "github.com/spf13/jwalterweatherman"
 	"github.com/stoic-cli/stoic-cli-core/tool"
 )
@@ -45,13 +44,13 @@ func (tc *ToolConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	var to TypedOptions
 
-	if err := toTypedOptions(data.Getter, &to); err != nil {
+	if err := toTypedOptions("tool getter", data.Getter, &to); err != nil {
 		return err
 	}
 	tc.Getter.Type = to.Type
 	tc.Getter.Options = to.Options
 
-	if err := toTypedOptions(data.Runner, &to); err != nil {
+	if err := toTypedOptions("tool runner", data.Runner, &to); err != nil {
 		return err
 	}
 	tc.Runner.Type = to.Type
@@ -60,7 +59,7 @@ func (tc *ToolConfig) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	return nil
 }
 
-func toTypedOptions(data interface{}, to *TypedOptions) error {
+func toTypedOptions(optionsType string, data interface{}, to *TypedOptions) error {
 	to.Type = ""
 	to.Options = map[string]interface{}{}
 
@@ -84,7 +83,9 @@ func toTypedOptions(data interface{}, to *TypedOptions) error {
 			if stringKey == "type" {
 				typ, ok := v.(string)
 				if !ok {
-					return fmt.Errorf("invalid type: %T", typ)
+					return errors.Errorf(
+						"invalid (non-string) key of type %T in options for %s",
+						typ, optionsType)
 				}
 
 				to.Type = typ
@@ -97,5 +98,6 @@ func toTypedOptions(data interface{}, to *TypedOptions) error {
 		return nil
 	}
 
-	return fmt.Errorf("expected string or map, got %T", data)
+	return errors.Errorf(
+		"invalid %s type; expected string or map, got %T", optionsType, data)
 }

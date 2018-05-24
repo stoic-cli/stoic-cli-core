@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 
+	"github.com/pkg/errors"
 	"github.com/stoic-cli/stoic-cli-core"
 	"github.com/stoic-cli/stoic-cli-core/tool"
 )
@@ -68,7 +69,7 @@ func (e *engine) getterFor(tool stoic.Tool) (tool.Getter, error) {
 	if getter != nil {
 		return getter.(toolGetterRecord).Ctor(e, tool)
 	}
-	return nil, fmt.Errorf("unknown getter type: %v", typ)
+	return nil, errors.Errorf("unknown getter type, '%v'", typ)
 }
 
 func (e *engine) runnerFor(tool stoic.Tool) (tool.Runner, error) {
@@ -77,5 +78,5 @@ func (e *engine) runnerFor(tool stoic.Tool) (tool.Runner, error) {
 	if runner != nil {
 		return runner.(toolRunnerRecord).Ctor(e, tool)
 	}
-	return nil, fmt.Errorf("unknown runner type: %v", typ)
+	return nil, errors.Errorf("unknown runner type, '%v'", typ)
 }

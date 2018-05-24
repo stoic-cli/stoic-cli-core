@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/pkg/errors"
 	"github.com/stoic-cli/stoic-cli-core"
 )
 
@@ -34,8 +35,7 @@ func getPipScript(cache stoic.Cache) (string, error) {
 
 	script, err := ioutil.TempFile("", "get-pip-*.py")
 	if err != nil {
-		return "", fmt.Errorf(
-			"unable to set up temp file for get-pip.py: %v", err)
+		return "", errors.Wrap(err, "unable to set up temp file for get-pip.py")
 	}
 	defer func() {
 		if err != nil {
@@ -49,21 +49,20 @@ func getPipScript(cache stoic.Cache) (string, error) {
 
 		_, err = io.Copy(script, cacheReader)
 		if err != nil {
-			return "", fmt.Errorf(
-				"unable to read get-pip.py from cache: %v", err)
+			return "", errors.Wrap(err, "unable to read get-pip.py from cache")
 		}
 	} else {
 		resp, err := http.Get(getPipURL)
 		if err != nil {
-			return "", fmt.Errorf(
-				"unable to download get-pip.py script from upstream: %v", err)
+			return "", errors.Wrapf(err,
+				"unable to download get-pip.py script from %v", getPipURL)
 		}
 		defer resp.Body.Close()
 
 		err = cache.Put(getPipCacheKey, io.TeeReader(resp.Body, script))
 		if err != nil {
-			return "", fmt.Errorf(
-				"unable to download get-pip.py script from upstream: %v", err)
+			return "", errors.Wrapf(err,
+				"unable to download get-pip.py script from %v", getPipURL)
 		}
 	}
 
@@ -89,14 +88,14 @@ func newPythonEnvironment(root string, python string, cache stoic.Cache) (python
 	}
 
 	if err := os.MkdirAll(pe.Scripts(), os.ModePerm); err != nil {
-		return pythonEnvironment{}, fmt.Errorf(
-			"unable to setup directory for python environmnent: %v", err)
+		return pythonEnvironment{}, errors.Wrap(err,
+			"unable to setup directory for python environmnent")
 	}
 
 	envRequirements := filepath.Join(pe.root, requirementsBase)
 	if err := ioutil.WriteFile(envRequirements, requirements, 0644); err != nil {
-		return pythonEnvironment{}, fmt.Errorf(
-			"unable to write requirements for python environment: %v", err)
+		return pythonEnvironment{}, errors.Wrap(err,
+			"unable to write requirements for python environment")
 	}
 
 	///...
@@ -129,8 +128,8 @@ func newPythonEnvironment(root string, python string, cache stoic.Cache) (python
 	cmd.Env = pe.environForSetup()
 
 	if err := cmd.Run(); err != nil {
-		return pythonEnvironment{}, fmt.Errorf(
-			"unable to setup pip in python environment: %v", err)
+		return pythonEnvironment{}, errors.Wrap(err,
+			"unable to setup pip in python environment")
 	}
 
 	ioutil.WriteFile(marker, currentTimestamp(), 0644)
@@ -163,9 +162,9 @@ func (pe pythonEnvironment) PythonEnviron() []string {
 func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virtualEnvironment, error) {
 	requirements, err := ioutil.ReadFile(requirementsFile)
 	if err != nil {
-		return virtualEnvironment{}, fmt.Errorf(
-			"unable to read requirements for virtual environment from %v: %v",
-			requirementsFile, err)
+		return virtualEnvironment{}, errors.Wrapf(err,
+			"unable to read requirements for virtual environment from %v",
+			requirementsFile)
 	}
 
 	venvHash := fmt.Sprintf("%x", sha256.Sum256(requirements))
@@ -203,15 +202,15 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 
 	err = initVenv.Run()
 	if err != nil {
-		return virtualEnvironment{}, fmt.Errorf(
-			"unable to initialize virtual environment: %v", err)
+		return virtualEnvironment{}, errors.Wrap(err,
+			"unable to initialize virtual environment")
 	}
 
 	venvRequirements := filepath.Join(ve.root, requirementsBase)
 	err = ioutil.WriteFile(venvRequirements, requirements, 0644)
 	if err != nil {
-		return virtualEnvironment{}, fmt.Errorf(
-			"unable to write requirements in virtual environment: %v", err)
+		return virtualEnvironment{}, errors.Wrap(err,
+			"unable to write requirements in virtual environment")
 	}
 
 	installRequirements := exec.Command(ve.PythonExecutable(),
@@ -227,8 +226,8 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 
 	err = installRequirements.Run()
 	if err != nil {
-		return virtualEnvironment{}, fmt.Errorf(
-			"unable to setup requirements in virtual environment: %v", err)
+		return virtualEnvironment{}, errors.Wrap(err,
+			"unable to setup requirements in virtual environment")
 	}
 
 	ioutil.WriteFile(marker, currentTimestamp(), 0644)

@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/pkg/errors"
 	"github.com/stoic-cli/stoic-cli-core"
 	shell "github.com/stoic-cli/stoic-cli-core/run-shell"
 	"github.com/stoic-cli/stoic-cli-core/tool"
