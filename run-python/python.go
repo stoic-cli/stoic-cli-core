@@ -1,0 +1,265 @@
+package runner
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"fmt"
+	"io"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+
+	"github.com/stoic-cli/stoic-cli-core"
+)
+
+const (
+	getPipCacheKey = "run-python/get-pip.py"
+	getPipURL      = "https://bootstrap.pypa.io/get-pip.py"
+
+	readyBase        = ".ready"
+	requirementsBase = ".requirements"
+
+	pipRequirements = "" +
+		"pip==10.0.1 --hash=sha256:717cdffb2833be8409433a93746744b59505f42146e8d37de6c62b430e25d6d7\n" +
+		"setuptools==39.1.0 --hash=sha256:0cb8b8625bfdcc2d43ea4b9cdba0b39b2b7befc04f3088897031082aa16ce186\n" +
+		"virtualenv==15.2.0 --hash=sha256:e8e05d4714a1c51a2f5921e62f547fcb0f713ebbe959e0a7f585cc8bef71d11f\n" +
+		"wheel==0.31.0 --hash=sha256:9cdc8ab2cc9c3c2e2727a4b67c22881dbb0e1c503d592992594c5e131c867107\n" +
+		""
+)
+
+func getPipScript(cache stoic.Cache) (string, error) {
+	var err error
+
+	script, err := ioutil.TempFile("", "get-pip-*.py")
+	if err != nil {
+		return "", fmt.Errorf(
+			"unable to set up temp file for get-pip.py: %v", err)
+	}
+	defer func() {
+		if err != nil {
+			os.Remove(script.Name())
+		}
+		script.Close()
+	}()
+
+	if cacheReader := cache.Get(getPipCacheKey); cacheReader != nil {
+		defer cacheReader.Close()
+
+		_, err = io.Copy(script, cacheReader)
+		if err != nil {
+			return "", fmt.Errorf(
+				"unable to read get-pip.py from cache: %v", err)
+		}
+	} else {
+		resp, err := http.Get(getPipURL)
+		if err != nil {
+			return "", fmt.Errorf(
+				"unable to download get-pip.py script from upstream: %v", err)
+		}
+		defer resp.Body.Close()
+
+		err = cache.Put(getPipCacheKey, io.TeeReader(resp.Body, script))
+		if err != nil {
+			return "", fmt.Errorf(
+				"unable to download get-pip.py script from upstream: %v", err)
+		}
+	}
+
+	return script.Name(), nil
+}
+
+func newPythonEnvironment(root string, python string, cache stoic.Cache) (pythonEnvironment, error) {
+	buf := bytes.NewBuffer(nil)
+	fmt.Fprintf(buf, "# Python: %s\n%s", python, pipRequirements)
+
+	pipCache := filepath.Join(root, "pip-cache")
+	pythonName := filepath.Base(python)
+
+	requirements := buf.Bytes()
+	envHash := sha256.Sum256(requirements)
+	envRoot := filepath.Join(root, fmt.Sprintf("%s-%.4x", pythonName, envHash))
+
+	pe := pythonEnvironment{python, pipCache, envRoot}
+
+	marker := filepath.Join(pe.root, readyBase)
+	if fileExists(marker) {
+		return pe, nil
+	}
+
+	if err := os.MkdirAll(pe.Scripts(), os.ModePerm); err != nil {
+		return pythonEnvironment{}, fmt.Errorf(
+			"unable to setup directory for python environmnent: %v", err)
+	}
+
+	envRequirements := filepath.Join(pe.root, requirementsBase)
+	if err := ioutil.WriteFile(envRequirements, requirements, 0644); err != nil {
+		return pythonEnvironment{}, fmt.Errorf(
+			"unable to write requirements for python environment: %v", err)
+	}
+
+	///...
+	getPip, err := getPipScript(cache)
+	if err != nil {
+		return pythonEnvironment{}, err
+	}
+	defer os.Remove(getPip)
+
+	cmd := exec.Command(python, getPip,
+		"--disable-pip-version-check",
+		"--no-warn-script-location",
+		"--ignore-installed",
+		"--isolated",
+		"--cache-dir", pipCache,
+		pe.installModeForSetup(),
+		"--require-hashes",
+		"--requirement", envRequirements,
+
+		// Disable implicit packages
+		"--no-setuptools", "--no-wheel",
+
+		// HACK: Disable implicit pip
+		// MUST BE LAST parameter. See https://github.com/pypa/pip/issues/3685
+		"--src")
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	cmd.Env = pe.environForSetup()
+
+	if err := cmd.Run(); err != nil {
+		return pythonEnvironment{}, fmt.Errorf(
+			"unable to setup pip in python environment: %v", err)
+	}
+
+	ioutil.WriteFile(marker, currentTimestamp(), 0644)
+	return pe, nil
+}
+
+// pythonEnvironment holds a minimal python setup that can create python virtual
+// environments.
+type pythonEnvironment struct {
+	python   string
+	pipCache string
+	root     string
+}
+
+func (pe pythonEnvironment) PipCache() string {
+	return pe.pipCache
+}
+
+func (pe pythonEnvironment) PythonExecutable() string {
+	return pe.python
+}
+
+func (pe pythonEnvironment) PythonEnviron() []string {
+	return append(os.Environ(),
+		"PIP_CACHE_DIR="+pe.pipCache,
+		"PYTHONPATH="+pe.SitePackages(),
+	)
+}
+
+func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virtualEnvironment, error) {
+	requirements, err := ioutil.ReadFile(requirementsFile)
+	if err != nil {
+		return virtualEnvironment{}, fmt.Errorf(
+			"unable to read requirements for virtual environment from %v: %v",
+			requirementsFile, err)
+	}
+
+	venvHash := fmt.Sprintf("%x", sha256.Sum256(requirements))
+	venvBase := filepath.Join(pe.root, "env", venvHash[:2], venvHash[2:])
+
+	ve := virtualEnvironment{pe, venvBase}
+
+	marker := filepath.Join(ve.root, readyBase)
+	if fileExists(marker) {
+		// macOS: homebrew installations of python can be regularly updated,
+		// breaking virtual environments, so check for it.
+		pythonExecutable, err := os.Readlink(filepath.Join(ve.root, ".Python"))
+		if os.IsNotExist(err) {
+			// Breakage detection does not apply, assume ve is good
+			return ve, nil
+		}
+		if fileExists(pythonExecutable) {
+			return ve, nil
+		}
+	}
+
+	initVenv := exec.Command(pe.PythonExecutable(),
+		"-S", "-m", "virtualenv", "--quiet",
+
+		// Disable implicit packages
+		"--no-pip", "--no-setuptools", "--no-wheel",
+		ve.root,
+	)
+	initVenv.Stdout = os.Stdout
+	initVenv.Stderr = os.Stderr
+	initVenv.Env = pe.PythonEnviron()
+
+	// virtualenv reported failing on Linux with non UTF-8 locale
+	initVenv.Env = append(initVenv.Env, "LANG=en_US.UTF-8")
+
+	err = initVenv.Run()
+	if err != nil {
+		return virtualEnvironment{}, fmt.Errorf(
+			"unable to initialize virtual environment: %v", err)
+	}
+
+	venvRequirements := filepath.Join(ve.root, requirementsBase)
+	err = ioutil.WriteFile(venvRequirements, requirements, 0644)
+	if err != nil {
+		return virtualEnvironment{}, fmt.Errorf(
+			"unable to write requirements in virtual environment: %v", err)
+	}
+
+	installRequirements := exec.Command(ve.PythonExecutable(),
+		"-m", "pip", "install",
+		"--disable-pip-version-check",
+		"--no-warn-script-location",
+		"--ignore-installed",
+		"--requirement", venvRequirements,
+	)
+	installRequirements.Stdout = os.Stdout
+	installRequirements.Stderr = os.Stderr
+	installRequirements.Env = pe.PythonEnviron()
+
+	err = installRequirements.Run()
+	if err != nil {
+		return virtualEnvironment{}, fmt.Errorf(
+			"unable to setup requirements in virtual environment: %v", err)
+	}
+
+	ioutil.WriteFile(marker, currentTimestamp(), 0644)
+	return ve, nil
+}
+
+type virtualEnvironment struct {
+	pe   pythonEnvironment
+	root string
+}
+
+func (ve virtualEnvironment) Root() string {
+	return ve.root
+}
+
+func (ve virtualEnvironment) PythonExecutable() string {
+	return filepath.Join(ve.Scripts(), "python")
+}
+
+func (ve virtualEnvironment) PathEnv() string {
+	vePath := ve.Scripts()
+	if curPath := os.Getenv("PATH"); curPath != "" {
+		vePath = vePath + string(os.PathListSeparator) + curPath
+	}
+	return vePath
+}
+
+func (ve virtualEnvironment) PythonEnviron() []string {
+	// TODO: Should filter out PYTHONHOME from environment, if set
+	return append(os.Environ(),
+		"PATH="+ve.PathEnv(),
+		"PYTHONPATH="+ve.pe.SitePackages(),
+		"VIRTUAL_ENV="+ve.root)
+}
