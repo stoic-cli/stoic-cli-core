@@ -15,27 +15,27 @@ import (
 )
 
 func NewRunner(s stoic.Stoic, tool stoic.Tool) (tool.Runner, error) {
-	var options shellRunnerOptions
+	var options Options
 	err := mapstructure.Decode(tool.Config().Runner.Options, &options)
 	if err != nil {
 		return nil, err
 	}
-	return shellRunner{s, options}, nil
+	return Runner{s, options}, nil
 }
 
-type shellRunnerOptions struct {
+type Options struct {
 	Setup            string
 	Command          string
 	SetupEnvironment map[string]string `mapstructure:"setup-environment"`
 	Environment      map[string]string
 }
 
-type shellRunner struct {
+type Runner struct {
 	Stoic   stoic.Stoic
-	options shellRunnerOptions
+	Options Options
 }
 
-func (sr shellRunner) shellCommand(
+func (sr Runner) shellCommand(
 	checkout tool.Checkout, shellCommand string, environment map[string]string) (*exec.Cmd, error) {
 	if shellCommand == "" {
 		return nil, nil
@@ -85,8 +85,8 @@ func (sr shellRunner) shellCommand(
 	return cmd, nil
 }
 
-func (sr shellRunner) Setup(checkout tool.Checkout) error {
-	cmd, err := sr.shellCommand(checkout, sr.options.Setup, sr.options.SetupEnvironment)
+func (sr Runner) Setup(checkout tool.Checkout) error {
+	cmd, err := sr.shellCommand(checkout, sr.Options.Setup, sr.Options.SetupEnvironment)
 	if err != nil {
 		return err
 	}
@@ -98,8 +98,8 @@ func (sr shellRunner) Setup(checkout tool.Checkout) error {
 	return cmd.Run()
 }
 
-func (sr shellRunner) Run(checkout tool.Checkout, name string, args []string) error {
-	cmd, err := sr.shellCommand(checkout, sr.options.Command, sr.options.Environment)
+func (sr Runner) Run(checkout tool.Checkout, name string, args []string) error {
+	cmd, err := sr.shellCommand(checkout, sr.Options.Command, sr.Options.Environment)
 	if err != nil {
 		return err
 	}
