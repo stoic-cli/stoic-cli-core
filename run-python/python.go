@@ -159,7 +159,7 @@ func (pe pythonEnvironment) PipCache() string {
 	return pe.pipCache
 }
 
-func (pe pythonEnvironment) PythonExecutable() string {
+func (pe pythonEnvironment) Python() string {
 	return pe.python
 }
 
@@ -187,17 +187,17 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 	if fileExists(marker) {
 		// macOS: homebrew installations of python can be regularly updated,
 		// breaking virtual environments, so check for it.
-		pythonExecutable, err := os.Readlink(filepath.Join(ve.root, ".Python"))
+		python, err := os.Readlink(filepath.Join(ve.root, ".Python"))
 		if os.IsNotExist(err) {
 			// Breakage detection does not apply, assume ve is good
 			return ve, nil
 		}
-		if fileExists(pythonExecutable) {
+		if fileExists(python) {
 			return ve, nil
 		}
 	}
 
-	initVenv := exec.Command(pe.PythonExecutable(),
+	initVenv := exec.Command(pe.Python(),
 		"-S", "-m", "virtualenv", "--quiet",
 
 		// Disable implicit packages
@@ -230,7 +230,7 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 			"unable to write requirements in virtual environment")
 	}
 
-	installRequirements := exec.Command(ve.PythonExecutable(),
+	installRequirements := exec.Command(ve.Python(),
 		"-m", "pip", "install",
 		"--disable-pip-version-check",
 		"--no-warn-script-location",
@@ -262,7 +262,7 @@ func (ve virtualEnvironment) Root() string {
 	return ve.root
 }
 
-func (ve virtualEnvironment) PythonExecutable() string {
+func (ve virtualEnvironment) Python() string {
 	return filepath.Join(ve.Scripts(), "python")
 }
 

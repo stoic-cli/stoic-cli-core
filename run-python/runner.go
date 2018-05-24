@@ -25,7 +25,7 @@ func newRunner(s stoic.Stoic, t stoic.Tool) (tool.Runner, error) {
 	if !ok {
 		return nil, errors.New("python executable not specified")
 	}
-	pythonExecutable, err := lookupAbsolutePath(python)
+	absolutePython, err := lookupAbsolutePath(python)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"unable to find python executable %s: %v", python, err)
@@ -72,7 +72,7 @@ func newRunner(s stoic.Stoic, t stoic.Tool) (tool.Runner, error) {
 			"unable to cast shell runner of type %T to shell.Runner",
 			shellRunner)
 	}
-	return runner{sr, root, pythonExecutable, options}, nil
+	return runner{sr, root, absolutePython, options}, nil
 }
 
 func NewPythonRunner(s stoic.Stoic, t stoic.Tool) (tool.Runner, error) {
@@ -122,7 +122,7 @@ func (r runner) Setup(checkout tool.Checkout) error {
 		return err
 	}
 
-	setupCommand := exec.Command(ve.PythonExecutable(),
+	setupCommand := exec.Command(ve.Python(),
 		"-m", "pip", "check", "--quiet")
 
 	setupCommand.Stdout = os.Stdout
@@ -174,7 +174,7 @@ func (r runner) Run(checkout tool.Checkout, name string, args []string) error {
 		pythonPath = modulePath + string(os.PathListSeparator) + pythonPath
 	}
 
-	r.ShellRunner.Options.Parameters["Python"] = ve.PythonExecutable()
+	r.ShellRunner.Options.Parameters["Python"] = ve.Python()
 	r.ShellRunner.Options.Parameters["VirtualEnv"] = ve.Root()
 	r.ShellRunner.Options.Parameters["VirtualEnvScripts"] = ve.Scripts()
 
