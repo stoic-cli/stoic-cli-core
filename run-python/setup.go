@@ -70,7 +70,7 @@ func getPipScript(cache stoic.Cache) (string, error) {
 	return script.Name(), nil
 }
 
-func newPythonEnvironment(root string, python string, cache stoic.Cache) (pythonEnvironment, error) {
+func setupPythonEnv(root string, python string, cache stoic.Cache) (PythonEnv, error) {
 	buf := bytes.NewBuffer(nil)
 	fmt.Fprintf(buf, "# Python: %s\n%s", python, pipRequirements)
 
@@ -81,35 +81,35 @@ func newPythonEnvironment(root string, python string, cache stoic.Cache) (python
 	envHash := sha256.Sum256(requirements)
 	envRoot := filepath.Join(root, fmt.Sprintf("%s-%.4x", pythonName, envHash))
 
-	pe := pythonEnvironment{python, pipCache, envRoot}
+	pe := newPythonEnv(envRoot, python, pipCache)
 
-	marker := filepath.Join(pe.root, readyBase)
+	marker := filepath.Join(envRoot, readyBase)
 	if fileExists(marker) {
 		return pe, nil
 	}
 
 	err := os.MkdirAll(pe.Scripts(), os.ModePerm)
 	if err != nil {
-		return pythonEnvironment{}, errors.Wrap(err,
+		return nil, errors.Wrap(err,
 			"unable to setup directory for python environmnent")
 	}
 
 	defer func() {
 		if err != nil {
-			os.RemoveAll(pe.root)
+			os.RemoveAll(envRoot)
 		}
 	}()
 
-	envRequirements := filepath.Join(pe.root, requirementsBase)
+	envRequirements := filepath.Join(envRoot, requirementsBase)
 	err = ioutil.WriteFile(envRequirements, requirements, 0644)
 	if err != nil {
-		return pythonEnvironment{}, errors.Wrap(err,
+		return nil, errors.Wrap(err,
 			"unable to write requirements for python environment")
 	}
 
 	getPip, err := getPipScript(cache)
 	if err != nil {
-		return pythonEnvironment{}, err
+		return nil, err
 	}
 	defer os.Remove(getPip)
 
@@ -119,7 +119,7 @@ func newPythonEnvironment(root string, python string, cache stoic.Cache) (python
 		"--ignore-installed",
 		"--isolated",
 		"--cache-dir", pipCache,
-		pe.installModeForSetup(),
+		pe.(*pythonEnv).InstallModeForSetup(),
 		"--require-hashes",
 		"--requirement", envRequirements,
 
@@ -133,11 +133,11 @@ func newPythonEnvironment(root string, python string, cache stoic.Cache) (python
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	cmd.Env = pe.environForSetup()
+	cmd.Env = pe.(*pythonEnv).EnvironForSetup()
 
 	err = cmd.Run()
 	if err != nil {
-		return pythonEnvironment{}, errors.Wrap(err,
+		return nil, errors.Wrap(err,
 			"unable to setup pip in python environment")
 	}
 
@@ -147,47 +147,24 @@ func newPythonEnvironment(root string, python string, cache stoic.Cache) (python
 	return pe, nil
 }
 
-// pythonEnvironment holds a minimal python setup that can create python virtual
-// environments.
-type pythonEnvironment struct {
-	python   string
-	pipCache string
-	root     string
-}
-
-func (pe pythonEnvironment) PipCache() string {
-	return pe.pipCache
-}
-
-func (pe pythonEnvironment) Python() string {
-	return pe.python
-}
-
-func (pe pythonEnvironment) Environ() []string {
-	return append(os.Environ(),
-		"PIP_CACHE_DIR="+pe.pipCache,
-		"PYTHONPATH="+pe.SitePackages(),
-	)
-}
-
-func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virtualEnvironment, error) {
+func setupVirtualEnv(pe PythonEnv, requirementsFile string) (VirtualEnv, error) {
 	requirements, err := ioutil.ReadFile(requirementsFile)
 	if err != nil {
-		return virtualEnvironment{}, errors.Wrapf(err,
+		return nil, errors.Wrapf(err,
 			"unable to read requirements for virtual environment from %v",
 			requirementsFile)
 	}
 
 	venvHash := fmt.Sprintf("%x", sha256.Sum256(requirements))
-	venvBase := filepath.Join(pe.root, "env", venvHash[:2], venvHash[2:])
+	venvBase := filepath.Join(pe.Root(), "env", venvHash[:2], venvHash[2:])
 
-	ve := virtualEnvironment{pe, venvBase}
+	ve := newVirtualEnv(pe, venvBase)
 
-	marker := filepath.Join(ve.root, readyBase)
+	marker := filepath.Join(ve.Root(), readyBase)
 	if fileExists(marker) {
 		// macOS: homebrew installations of python can be regularly updated,
 		// breaking virtual environments, so check for it.
-		python, err := os.Readlink(filepath.Join(ve.root, ".Python"))
+		python, err := os.Readlink(filepath.Join(ve.Root(), ".Python"))
 		if os.IsNotExist(err) {
 			// Breakage detection does not apply, assume ve is good
 			return ve, nil
@@ -202,9 +179,9 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 
 		// Disable implicit packages
 		"--no-pip", "--no-setuptools", "--no-wheel",
-		ve.root,
+		ve.Root(),
 	)
-	initVenv.Stdout = os.Stdout
+	initVenv.Stdout = os.Stderr
 	initVenv.Stderr = os.Stderr
 	initVenv.Env = pe.Environ()
 
@@ -213,20 +190,19 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 
 	err = initVenv.Run()
 	if err != nil {
-		return virtualEnvironment{}, errors.Wrap(err,
-			"unable to initialize virtual environment")
+		return nil, errors.Wrap(err, "unable to initialize virtual environment")
 	}
 
 	defer func() {
 		if err != nil {
-			_ = os.RemoveAll(ve.root)
+			_ = os.RemoveAll(ve.Root())
 		}
 	}()
 
-	venvRequirements := filepath.Join(ve.root, requirementsBase)
+	venvRequirements := filepath.Join(ve.Root(), requirementsBase)
 	err = ioutil.WriteFile(venvRequirements, requirements, 0644)
 	if err != nil {
-		return virtualEnvironment{}, errors.Wrap(err,
+		return nil, errors.Wrap(err,
 			"unable to write requirements in virtual environment")
 	}
 
@@ -243,7 +219,7 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 
 	err = installRequirements.Run()
 	if err != nil {
-		return virtualEnvironment{}, errors.Wrap(err,
+		return nil, errors.Wrap(err,
 			"unable to setup requirements in virtual environment")
 	}
 
@@ -251,33 +227,4 @@ func (pe pythonEnvironment) NewVirtualEnvironment(requirementsFile string) (virt
 		jww.DEBUG.Printf("failed to mark virtual environment as ready: %v", err)
 	}
 	return ve, nil
-}
-
-type virtualEnvironment struct {
-	pe   pythonEnvironment
-	root string
-}
-
-func (ve virtualEnvironment) Root() string {
-	return ve.root
-}
-
-func (ve virtualEnvironment) Python() string {
-	return filepath.Join(ve.Scripts(), "python")
-}
-
-func (ve virtualEnvironment) PathEnv() string {
-	vePath := ve.Scripts()
-	if curPath := os.Getenv("PATH"); curPath != "" {
-		vePath = vePath + string(os.PathListSeparator) + curPath
-	}
-	return vePath
-}
-
-func (ve virtualEnvironment) Environ() []string {
-	// TODO: Should filter out PYTHONHOME from environment, if set
-	return append(os.Environ(),
-		"PATH="+ve.PathEnv(),
-		"PYTHONPATH="+ve.pe.SitePackages(),
-		"VIRTUAL_ENV="+ve.root)
 }

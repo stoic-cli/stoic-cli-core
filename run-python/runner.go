@@ -111,13 +111,13 @@ type runner struct {
 }
 
 func (r runner) Setup(checkout tool.Checkout) error {
-	pe, err := newPythonEnvironment(r.Root, r.Python, r.ShellRunner.Stoic.Cache())
+	pe, err := setupPythonEnv(r.Root, r.Python, r.ShellRunner.Stoic.Cache())
 	if err != nil {
 		return err
 	}
 
 	requirementsFile := filepath.Join(checkout.Path(), r.RequirementsFile)
-	ve, err := pe.NewVirtualEnvironment(requirementsFile)
+	ve, err := setupVirtualEnv(pe, requirementsFile)
 	if err != nil {
 		return err
 	}
@@ -140,13 +140,13 @@ func (r runner) Setup(checkout tool.Checkout) error {
 }
 
 func (r runner) Run(checkout tool.Checkout, name string, args []string) error {
-	pe, err := newPythonEnvironment(r.Root, r.Python, r.ShellRunner.Stoic.Cache())
+	pe, err := setupPythonEnv(r.Root, r.Python, r.ShellRunner.Stoic.Cache())
 	if err != nil {
 		return err
 	}
 
 	requirementsFile := filepath.Join(checkout.Path(), r.RequirementsFile)
-	ve, err := pe.NewVirtualEnvironment(requirementsFile)
+	ve, err := setupVirtualEnv(pe, requirementsFile)
 	if err != nil {
 		return err
 	}
@@ -180,7 +180,7 @@ func (r runner) Run(checkout tool.Checkout, name string, args []string) error {
 
 	// TODO: Should filter out PYTHONHOME from environment, if set
 
-	r.ShellRunner.Options.Environment["PATH"] = ve.PathEnv()
+	r.ShellRunner.Options.Environment["PATH"] = ve.EnvPath()
 	r.ShellRunner.Options.Environment["PYTHONPATH"] = pythonPath
 	r.ShellRunner.Options.Environment["VIRTUAL_ENV"] = ve.Root()
 	return r.ShellRunner.Run(checkout, name, args)
