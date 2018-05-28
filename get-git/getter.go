@@ -1,4 +1,4 @@
-package gitgetter
+package getter
 
 import (
 	"bytes"
@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pkg/errors"
 	"github.com/stoic-cli/stoic-cli-core"
 	"github.com/stoic-cli/stoic-cli-core/tool"
-
 	"gopkg.in/src-d/go-git.v4"
 	gitplumbing "gopkg.in/src-d/go-git.v4/plumbing"
 	gitobject "gopkg.in/src-d/go-git.v4/plumbing/object"
@@ -23,7 +23,7 @@ func NewGetter(stoic stoic.Stoic, tool stoic.Tool) (tool.Getter, error) {
 	url := tool.Endpoint()
 	branch := Branch(tool.Channel())
 	if !branch.IsValid() {
-		return nil, fmt.Errorf("invalid branch name: %v", branch)
+		return nil, errors.Errorf("invalid branch name, '%v'", branch)
 	}
 
 	pathElems := []string{stoic.Root(), "git", url.Hostname()}
@@ -67,7 +67,7 @@ func (gg gitGetter) runNativeGit(command string, args ...string) error {
 
 	cmd.Env = environment
 
-	cmd.Stdout = os.Stdout
+	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 
 	return cmd.Run()
@@ -162,8 +162,8 @@ func (gg gitGetter) FetchVersion(pinVersion tool.Version) error {
 			}
 
 		case io.EOF:
-			return fmt.Errorf(
-				"requested version %.12v is unreachable from %v branch",
+			return errors.Errorf(
+				"requested version, %.12v, is unreachable from %v branch",
 				pinCommit.Hash.String(), gg.branch)
 
 		default:

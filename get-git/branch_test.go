@@ -1,4 +1,4 @@
-package gitgetter
+package getter
 
 import (
 	"github.com/stretchr/testify/assert"

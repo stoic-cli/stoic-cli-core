@@ -1,11 +1,12 @@
 package util
 
 import (
-	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/pkg/errors"
 )
 
 type AtomicFileWriter interface {
@@ -26,8 +27,8 @@ func OpenToChange(filename string) (AtomicFileWriter, error) {
 
 	lock, err := TryLockFile(lockedFile)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"unable to obtain lock on file %v: %v", lockedFile, err)
+		return nil, errors.Wrapf(err,
+			"unable to obtain lock on file %v", lockedFile)
 	}
 	defer func() {
 		if err != nil {
@@ -37,15 +38,15 @@ func OpenToChange(filename string) (AtomicFileWriter, error) {
 
 	curr, err := os.Open(lockedFile)
 	if err != nil && !os.IsNotExist(err) {
-		return nil, fmt.Errorf(
-			"unable to open current state, %v: %v", lockedFile, err)
+		return nil, errors.Wrapf(err,
+			"unable to open current state, %v", lockedFile)
 	}
 
 	dir, base := filepath.Split(lockedFile)
 	next, err := ioutil.TempFile(dir, base)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"unable to create temporary file for changes: %v", err)
+		return nil, errors.Wrap(err,
+			"unable to create temporary file for changes")
 	}
 
 	return &state{lock, curr, next}, nil

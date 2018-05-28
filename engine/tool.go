@@ -1,11 +1,11 @@
 package engine
 
 import (
-	"fmt"
 	"net/url"
 	"regexp"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/stoic-cli/stoic-cli-core"
 	"github.com/stoic-cli/stoic-cli-core/format"
 	"github.com/stoic-cli/stoic-cli-core/tool"
@@ -36,7 +36,7 @@ type engineTool struct {
 func (e *engine) getTool(name string) (stoic.Tool, error) {
 	config, ok := e.tools[name]
 	if !ok {
-		return nil, fmt.Errorf("unknown tool: %v", name)
+		return nil, errors.Errorf("unknown tool, '%v'", name)
 	}
 
 	endpoint := config.Endpoint
