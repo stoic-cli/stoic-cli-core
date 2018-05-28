@@ -130,7 +130,7 @@ func setupPythonEnv(root string, python string, cache stoic.Cache) (PythonEnv, e
 		// MUST BE LAST parameter. See https://github.com/pypa/pip/issues/3685
 		"--src")
 
-	cmd.Stdout = os.Stdout
+	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 
 	cmd.Env = pe.(*pythonEnv).EnvironForSetup()
@@ -213,7 +213,7 @@ func setupVirtualEnv(pe PythonEnv, requirementsFile string) (VirtualEnv, error) 
 		"--ignore-installed",
 		"--requirement", venvRequirements,
 	)
-	installRequirements.Stdout = os.Stdout
+	installRequirements.Stdout = os.Stderr
 	installRequirements.Stderr = os.Stderr
 	installRequirements.Env = pe.Environ()
 

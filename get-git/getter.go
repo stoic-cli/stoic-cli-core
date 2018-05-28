@@ -67,7 +67,7 @@ func (gg gitGetter) runNativeGit(command string, args ...string) error {
 
 	cmd.Env = environment
 
-	cmd.Stdout = os.Stdout
+	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 
 	return cmd.Run()

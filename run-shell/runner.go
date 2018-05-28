@@ -105,8 +105,6 @@ func (sr Runner) shellCommand(
 
 	cmd := exec.Command(command)
 	cmd.Args = cmdAndArgs
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 
 	if len(environment) != 0 {
 		cmd.Env = os.Environ()
@@ -134,6 +132,9 @@ func (sr Runner) Setup(checkout tool.Checkout) error {
 		return nil
 	}
 
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+
 	cmd.Dir = checkout.Path()
 	return cmd.Run()
 }
@@ -149,6 +150,9 @@ func (sr Runner) Run(checkout tool.Checkout, name string, args []string) error {
 	if cmd == nil {
 		return nil
 	}
+
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
 
 	cmd.Args = append(cmd.Args, args...)
 	return cmd.Run()

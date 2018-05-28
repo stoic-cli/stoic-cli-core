@@ -125,7 +125,7 @@ func (r runner) Setup(checkout tool.Checkout) error {
 	setupCommand := exec.Command(ve.Python(),
 		"-m", "pip", "check", "--quiet")
 
-	setupCommand.Stdout = os.Stdout
+	setupCommand.Stdout = os.Stderr
 	setupCommand.Stderr = os.Stderr
 	setupCommand.Env = ve.Environ()
 
