@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/stoic-cli/stoic-cli-core"
 	"github.com/stoic-cli/stoic-cli-core/tool"
@@ -20,32 +21,41 @@ import (
 )
 
 func NewGetter(stoic stoic.Stoic, tool stoic.Tool) (tool.Getter, error) {
-	url := tool.Endpoint()
-	branch := Branch(tool.Channel())
-	if !branch.IsValid() {
-		return nil, errors.Errorf("invalid branch name, '%v'", branch)
+	var options Options
+	err := mapstructure.Decode(tool.Config().Getter.Options, &options)
+	if err != nil {
+		return nil, err
 	}
 
-	pathElems := []string{stoic.Root(), "git", url.Hostname()}
-	pathElems = append(pathElems, strings.Split(url.EscapedPath(), "/")...)
+	if options.URL == nil {
+		options.URL = tool.Endpoint()
+	}
+	if options.Branch == "" {
+		options.Branch = Branch(tool.Channel())
+	}
+
+	if !options.Branch.IsValid() {
+		return nil, errors.Errorf("invalid branch name, '%v'", options.Branch)
+	}
+
+	pathElems := []string{stoic.Root(), "git", options.URL.Hostname()}
+	pathElems = append(pathElems, strings.Split(options.URL.EscapedPath(), "/")...)
 	gitDir := filepath.Join(pathElems...)
 
-	return &gitGetter{
-		url:    url,
-		branch: branch,
-
-		gitDir: gitDir,
-	}, nil
+	return &Getter{options, gitDir}, nil
 }
 
-type gitGetter struct {
-	url    *url.URL
-	branch Branch
+type Options struct {
+	URL    *url.URL
+	Branch Branch
+}
 
+type Getter struct {
+	Options
 	gitDir string
 }
 
-func (gg gitGetter) runNativeGit(command string, args ...string) error {
+func (gg Getter) runNativeGit(command string, args ...string) error {
 	var environment []string
 	for _, envVar := range os.Environ() {
 		switch strings.Split(envVar, "=")[0] {
@@ -73,21 +83,21 @@ func (gg gitGetter) runNativeGit(command string, args ...string) error {
 	return cmd.Run()
 }
 
-func (gg gitGetter) remoteReference() string {
-	if gg.branch == "" {
+func (gg Getter) remoteReference() string {
+	if gg.Branch == "" {
 		return "HEAD"
 	}
-	return "refs/heads/" + string(gg.branch)
+	return "refs/heads/" + string(gg.Branch)
 }
 
-func (gg gitGetter) localReference() string {
-	if gg.branch == "" {
+func (gg Getter) localReference() string {
+	if gg.Branch == "" {
 		return "refs/remotes/origin/HEAD"
 	}
-	return "refs/remotes/origin/" + string(gg.branch)
+	return "refs/remotes/origin/" + string(gg.Branch)
 }
 
-func (gg gitGetter) fetch() (gitplumbing.Revision, error) {
+func (gg Getter) fetch() (gitplumbing.Revision, error) {
 	_, err := git.PlainOpen(gg.gitDir)
 	if err == git.ErrRepositoryNotExists {
 		_, err = git.PlainInit(gg.gitDir, true)
@@ -100,7 +110,7 @@ func (gg gitGetter) fetch() (gitplumbing.Revision, error) {
 	refspec := fmt.Sprintf("+%v:%v", gg.remoteReference(), localRef)
 
 	// invoke native git for the authentication
-	url, _ := gg.url.MarshalBinary()
+	url, _ := gg.URL.MarshalBinary()
 	err = gg.runNativeGit("fetch", "--quiet", string(url), refspec)
 	if err != nil {
 		return "", err
@@ -109,7 +119,7 @@ func (gg gitGetter) fetch() (gitplumbing.Revision, error) {
 	return gitplumbing.Revision(localRef), nil
 }
 
-func (gg gitGetter) FetchLatest() (tool.Version, error) {
+func (gg Getter) FetchLatest() (tool.Version, error) {
 	ref, err := gg.fetch()
 	if err != nil {
 		return tool.NullVersion, err
@@ -125,7 +135,7 @@ func (gg gitGetter) FetchLatest() (tool.Version, error) {
 	return tool.Version(version.String()), nil
 }
 
-func (gg gitGetter) FetchVersion(pinVersion tool.Version) error {
+func (gg Getter) FetchVersion(pinVersion tool.Version) error {
 	localRef, err := gg.fetch()
 	if err != nil {
 		return err
@@ -164,7 +174,7 @@ func (gg gitGetter) FetchVersion(pinVersion tool.Version) error {
 		case io.EOF:
 			return errors.Errorf(
 				"requested version, %.12v, is unreachable from %v branch",
-				pinCommit.Hash.String(), gg.branch)
+				pinCommit.Hash.String(), gg.Branch)
 
 		default:
 			return err
@@ -172,7 +182,7 @@ func (gg gitGetter) FetchVersion(pinVersion tool.Version) error {
 	}
 }
 
-func (gg gitGetter) CheckoutTo(version tool.Version, path string) error {
+func (gg Getter) CheckoutTo(version tool.Version, path string) error {
 	dstGitDir := filepath.Join(path, ".git")
 
 	dstHeads := filepath.Join(dstGitDir, "refs", "heads")
@@ -220,7 +230,7 @@ url = %v
 refspec = +refs/heads/*:refs/remotes/origin/*
 [branch "%v"]
 remote = origin
-`, gg.url, "master")
+`, gg.URL, "master")
 	config.Close()
 
 	repo, err := git.PlainOpen(path)
